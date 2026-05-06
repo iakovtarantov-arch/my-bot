@@ -1,0 +1,97 @@
+import discord
+from discord.ext import commands
+from discord import app_commands
+import json
+import random
+import os
+
+TOKEN = "YOUR_BOT_TOKEN"
+DATA_FILE = "roles.json"
+
+intents = discord.Intents.default()
+intents.guilds = True
+intents.members = True
+
+bot = commands.Bot(command_prefix="!", intents=intents)
+
+
+def load_data():
+    if not os.path.exists(DATA_FILE):
+        return {}
+    with open(DATA_FILE, "r") as f:
+        return json.load(f)
+
+
+def save_data(data):
+    with open(DATA_FILE, "w") as f:
+        json.dump(data, f)
+
+
+def random_color():
+    return discord.Color(random.randint(0, 0xFFFFFF))
+
+
+@bot.event
+async def on_ready():
+    await bot.tree.sync()
+    print(f"Logged in as {bot.user}")
+
+
+@bot.tree.command(name="create-role", description="Create your personal role")
+async def create_role(interaction: discord.Interaction):
+    data = load_data()
+    user_id = str(interaction.user.id)
+
+    if user_id in data:
+        await interaction.response.send_message(
+            "You already have a role.", ephemeral=True
+        )
+        return
+
+    guild = interaction.guild
+
+    role = await guild.create_role(
+        name=f"{interaction.user.name}'s role",
+        reason="User personal role"
+    )
+
+    await interaction.user.add_roles(role)
+
+    data[user_id] = role.id
+    save_data(data)
+
+    await interaction.response.send_message(
+        f"Role {role.name} created and assigned to you!"
+    )
+
+
+@bot.tree.command(name="random-color", description="Randomize your role color")
+async def random_color_cmd(interaction: discord.Interaction):
+    data = load_data()
+    user_id = str(interaction.user.id)
+
+    if user_id not in data:
+        await interaction.response.send_message(
+            "You don't have a role yet. Use /create-role first.",
+            ephemeral=True
+        )
+        return
+
+    role_id = data[user_id]
+    role = interaction.guild.get_role(role_id)
+
+    if role is None:
+        await interaction.response.send_message(
+            "Your role no longer exists.", ephemeral=True
+        )
+        return
+
+    color = random_color()
+    await role.edit(color=color)
+
+    await interaction.response.send_message(
+        f"Your role color has been updated!"
+    )
+
+
+bot.run(TOKEN)
